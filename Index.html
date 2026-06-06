@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Beyond Sales – Webinar Quiz</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-database-compat.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .card {
+      background: white;
+      border-radius: 20px;
+      padding: 32px 24px;
+      max-width: 440px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      text-align: center;
+    }
+    .emoji { font-size: 48px; margin-bottom: 8px; }
+    h1 { font-size: 22px; font-weight: 800; color: #1e1b4b; margin-bottom: 10px; }
+    .sub { font-size: 14px; color: #555; line-height: 1.6; margin-bottom: 20px; }
+    .badge {
+      display: inline-block;
+      background: #ede9fe;
+      color: #7c3aed;
+      border-radius: 999px;
+      padding: 4px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+    .question { font-size: 16px; font-weight: 700; color: #1e1b4b; line-height: 1.5; margin-bottom: 20px; }
+    input {
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 2px solid #e5e7eb;
+      font-size: 16px;
+      margin-bottom: 14px;
+      outline: none;
+    }
+    input:focus { border-color: #7c3aed; }
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+    .option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 2px solid #e5e7eb;
+      background: #f9fafb;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: #374151;
+      text-align: left;
+      transition: all 0.15s;
+      width: 100%;
+    }
+    .option.selected { border-color: #7c3aed; background: #ede9fe; color: #5b21b6; }
+    .option-letter {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: #7c3aed;
+      color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 800;
+      flex-shrink: 0;
+    }
+    .time-tag { font-size: 15px; color: #7c3aed; font-weight: 600; margin-bottom: 20px; }
+    .leader-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      margin-bottom: 8px;
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      text-align: left;
+    }
+    .leader-row.gold { background: linear-gradient(90deg, #fef3c7, #fde68a); border: 2px solid #f59e0b; }
+    .rank { font-size: 20px; flex-shrink: 0; }
+    .l-name { flex: 1; font-weight: 700; color: #1e1b4b; }
+    .l-time { font-size: 13px; color: #555; font-weight: 600; }
+    .dim { opacity: 0.6; }
+    .refresh-note { font-size: 12px; color: #999; margin-top: 14px; }
+    .section-label { font-size: 13px; color: #888; margin: 16px 0 8px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+<div class="card" id="app">
+
+  <div id="screen-entry">
+    <div class="emoji">🎯</div>
+    <h1>Webinar Icebreaker!</h1>
+    <p class="sub">Before we kick off — let's see what you know. Enter your name to play!</p>
+    <input id="name-input" type="text" placeholder="Your name..." maxlength="40" />
+    <button class="btn" onclick="startQuiz()">Let's Go 🚀</button>
+  </div>
+
+  <div id="screen-quiz" class="hidden">
+    <div class="badge">⚡ Quick Fire</div>
+    <p class="question">Which number tells you how much money actually stays in your business after ALL expenses?</p>
+    <div class="options" id="options-container"></div>
+    <button class="btn" id="submit-btn" onclick="submitAnswer()" disabled>Submit Answer</button>
+  </div>
+
+  <div id="screen-result" class="hidden">
+    <div class="emoji" id="result-emoji"></div>
+    <h1 id="result-title"></h1>
+    <p class="sub" id="result-body"></p>
+    <p class="time-tag" id="result-time"></p>
+    <button class="btn" onclick="showLeaderboard()">See Leaderboard 🏆</button>
+  </div>
+
+  <div id="screen-leaderboard" class="hidden">
+    <h1>🏆 Leaderboard</h1>
+    <p class="sub" style="margin-bottom:14px">Fastest correct answers win!</p>
+    <div id="leaderboard-list"></div>
+    <p class="refresh-note">🔄 Live updates</p>
+  </div>
+
+</div>
+
+<script>
+  const firebaseConfig = {
+    databaseURL: "https://beyond-sales-webinar-quiz-default-rtdb.firebaseio.com/"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+  const leaderboardRef = db.ref("leaderboard");
+
+  const OPTIONS = ["Revenue", "Gross Margin", "Net Profit Margin", "Customer Acquisition Cost"];
+  const CORRECT = 2;
+
+  let userName = "", selected = null, startTime = null;
+
+  function show(id) {
+    ["screen-entry","screen-quiz","screen-result","screen-leaderboard"].forEach(s =>
+      document.getElementById(s).classList.add("hidden")
+    );
+    document.getElementById(id).classList.remove("hidden");
+  }
+
+  function formatTime(ms) {
+    return ms < 1000 ? `${ms}ms` : `${(ms/1000).toFixed(2)}s`;
+  }
+
+  function getRank(i) {
+    return ["🥇","🥈","🥉"][i] || `#${i+1}`;
+  }
+
+  // Build options
+  const container = document.getElementById("options-container");
+  OPTIONS.forEach((opt, i) => {
+    const btn = document.createElement("button");
+    btn.className = "option";
+    btn.id = `opt-${i}`;
+    btn.innerHTML = `<span class="option-letter">${String.fromCharCode(65+i)}</span>${opt}`;
+    btn.onclick = () => {
+      selected = i;
+      OPTIONS.forEach((_, j) =>
+        document.getElementById(`opt-${j}`).classList.toggle("selected", j === i)
+      );
+      document.getElementById("submit-btn").disabled = false;
+    };
+    container.appendChild(btn);
+  });
+
+  window.startQuiz = () => {
+    const val = document.getElementById("name-input").value.trim();
+    if (!val) return;
+    userName = val;
+    startTime = Date.now();
+    show("screen-quiz");
+  };
+
+  window.submitAnswer = () => {
+    if (selected === null) return;
+    document.getElementById("submit-btn").disabled = true;
+    const elapsed = Date.now() - startTime;
+    const correct = selected === CORRECT;
+
+    leaderboardRef.push({ name: userName, correct, time: elapsed, answer: OPTIONS[selected], timestamp: Date.now() });
+
+    document.getElementById("result-emoji").textContent = correct ? "🎉" : "💡";
+    document.getElementById("result-title").textContent = correct ? "Correct!" : "Not quite!";
+    document.getElementById("result-body").textContent = correct
+      ? "Net Profit Margin is the number that shows what actually stays after every expense is paid. You're already thinking like a CFO!"
+      : `The answer is Net Profit Margin — the real number that tells you what's left after ALL the bills are paid. That's exactly what today's webinar is about!`;
+    document.getElementById("result-time").textContent = correct
+      ? `⏱ Your time: ${formatTime(elapsed)}`
+      : `You answered: ${OPTIONS[selected]}`;
+
+    show("screen-result");
+  };
+
+  window.showLeaderboard = () => {
+    show("screen-leaderboard");
+    leaderboardRef.on("value", snapshot => {
+      const data = snapshot.val();
+      const entries = data ? Object.values(data) : [];
+      const correct = entries.filter(e => e.correct).sort((a,b) => a.time - b.time);
+      const incorrect = entries.filter(e => !e.correct);
+      const list = document.getElementById("leaderboard-list");
+      list.innerHTML = "";
+
+      if (correct.length === 0) {
+        list.innerHTML = `<p style="color:#999;text-align:center">No correct answers yet...</p>`;
+      }
+
+      correct.forEach((entry, i) => {
+        const row = document.createElement("div");
+        row.className = `leader-row${i === 0 ? " gold" : ""}`;
+        row.innerHTML = `<span class="rank">${getRank(i)}</span><span class="l-name">${entry.name}</span><span class="l-time">⏱ ${formatTime(entry.time)}</span>`;
+        list.appendChild(row);
+      });
+
+      if (incorrect.length > 0) {
+        const label = document.createElement("p");
+        label.className = "section-label";
+        label.textContent = "Also participated:";
+        list.appendChild(label);
+        incorrect.forEach(entry => {
+          const row = document.createElement("div");
+          row.className = "leader-row dim";
+          row.innerHTML = `<span class="rank">—</span><span class="l-name">${entry.name}</span><span class="l-time">❌ ${entry.answer}</span>`;
+          list.appendChild(row);
+        });
+      }
+    });
+  };
+
+  document.getElementById("name-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") window.startQuiz();
+  });
+</script>
+</body>
+</html>
