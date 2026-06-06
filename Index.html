@@ -63,6 +63,19 @@
       margin-top: 4px;
     }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-danger {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: none;
+      background: #fee2e2;
+      color: #dc2626;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 12px;
+    }
+    .btn-danger:hover { background: #fecaca; }
     .options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
     .option {
       display: flex;
@@ -107,22 +120,68 @@
     .l-name { flex: 1; font-weight: 700; color: #1e1b4b; }
     .l-time { font-size: 13px; color: #555; font-weight: 600; }
     .dim { opacity: 0.6; }
-    .refresh-note { font-size: 12px; color: #999; margin-top: 14px; }
     .section-label { font-size: 13px; color: #888; margin: 16px 0 8px; }
     .hidden { display: none; }
+    .host-link {
+      display: block;
+      margin-top: 24px;
+      font-size: 12px;
+      color: #bbb;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .host-link:hover { color: #888; }
+    .stats-bar {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-bottom: 16px;
+    }
+    .stat {
+      background: #f3f4f6;
+      border-radius: 10px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #1e1b4b;
+    }
+    .stat span { color: #7c3aed; font-size: 18px; display: block; }
+    .host-badge {
+      display: inline-block;
+      background: #fef3c7;
+      color: #92400e;
+      border-radius: 999px;
+      padding: 3px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
   </style>
 </head>
 <body>
 <div class="card" id="app">
 
+  <!-- Entry Screen -->
   <div id="screen-entry">
     <div class="emoji">🎯</div>
     <h1>Webinar Icebreaker!</h1>
     <p class="sub">Before we kick off — let's see what you know. Enter your name to play!</p>
     <input id="name-input" type="text" placeholder="Your name..." maxlength="40" />
     <button class="btn" onclick="startQuiz()">Let's Go 🚀</button>
+    <span class="host-link" onclick="showHostLogin()">Host Access</span>
   </div>
 
+  <!-- Host Login Screen -->
+  <div id="screen-host-login" class="hidden">
+    <div class="emoji">🔐</div>
+    <h1>Host Access</h1>
+    <p class="sub">Enter your host password to view the live leaderboard.</p>
+    <input id="host-password" type="password" placeholder="Password..." />
+    <button class="btn" onclick="verifyHost()">Enter</button>
+    <p id="host-error" style="color:#dc2626;font-size:13px;margin-top:10px;display:none">Incorrect password. Try again.</p>
+  </div>
+
+  <!-- Quiz Screen -->
   <div id="screen-quiz" class="hidden">
     <div class="badge">⚡ Quick Fire</div>
     <p class="question">Which number tells you how much money actually stays in your business after ALL expenses?</p>
@@ -130,19 +189,29 @@
     <button class="btn" id="submit-btn" onclick="submitAnswer()" disabled>Submit Answer</button>
   </div>
 
+  <!-- Result Screen -->
   <div id="screen-result" class="hidden">
     <div class="emoji" id="result-emoji"></div>
     <h1 id="result-title"></h1>
     <p class="sub" id="result-body"></p>
     <p class="time-tag" id="result-time"></p>
-    <button class="btn" onclick="showLeaderboard()">See Leaderboard 🏆</button>
+    <button class="btn" onclick="showLeaderboard(false)">See Leaderboard 🏆</button>
   </div>
 
+  <!-- Leaderboard Screen -->
   <div id="screen-leaderboard" class="hidden">
+    <div id="host-badge-wrap"></div>
     <h1>🏆 Leaderboard</h1>
     <p class="sub" style="margin-bottom:14px">Fastest correct answers win!</p>
+    <div class="stats-bar">
+      <div class="stat"><span id="stat-total">0</span>Played</div>
+      <div class="stat"><span id="stat-correct">0</span>Correct</div>
+    </div>
     <div id="leaderboard-list"></div>
-    <p class="refresh-note">🔄 Live updates</p>
+    <div id="host-controls" class="hidden">
+      <button class="btn-danger" onclick="resetLeaderboard()">🗑 Reset Leaderboard</button>
+    </div>
+    <p style="font-size:12px;color:#999;margin-top:14px">🔄 Live updates</p>
   </div>
 
 </div>
@@ -157,11 +226,12 @@
 
   const OPTIONS = ["Revenue", "Gross Margin", "Net Profit Margin", "Customer Acquisition Cost"];
   const CORRECT = 2;
+  const HOST_PASS = "beyondsales";
 
-  let userName = "", selected = null, startTime = null;
+  let userName = "", selected = null, startTime = null, isHost = false;
 
   function show(id) {
-    ["screen-entry","screen-quiz","screen-result","screen-leaderboard"].forEach(s =>
+    ["screen-entry","screen-host-login","screen-quiz","screen-result","screen-leaderboard"].forEach(s =>
       document.getElementById(s).classList.add("hidden")
     );
     document.getElementById(id).classList.remove("hidden");
@@ -170,10 +240,7 @@
   function formatTime(ms) {
     return ms < 1000 ? `${ms}ms` : `${(ms/1000).toFixed(2)}s`;
   }
-
-  function getRank(i) {
-    return ["🥇","🥈","🥉"][i] || `#${i+1}`;
-  }
+  function getRank(i) { return ["🥇","🥈","🥉"][i] || `#${i+1}`; }
 
   // Build options
   const container = document.getElementById("options-container");
@@ -191,6 +258,18 @@
     };
     container.appendChild(btn);
   });
+
+  window.showHostLogin = () => show("screen-host-login");
+
+  window.verifyHost = () => {
+    const pw = document.getElementById("host-password").value;
+    if (pw === HOST_PASS) {
+      isHost = true;
+      showLeaderboard(true);
+    } else {
+      document.getElementById("host-error").style.display = "block";
+    }
+  };
 
   window.startQuiz = () => {
     const val = document.getElementById("name-input").value.trim();
@@ -211,8 +290,8 @@
     document.getElementById("result-emoji").textContent = correct ? "🎉" : "💡";
     document.getElementById("result-title").textContent = correct ? "Correct!" : "Not quite!";
     document.getElementById("result-body").textContent = correct
-      ? "Net Profit Margin is the number that shows what actually stays after every expense is paid. You're already thinking like a CFO!"
-      : `The answer is Net Profit Margin — the real number that tells you what's left after ALL the bills are paid. That's exactly what today's webinar is about!`;
+      ? "Net Profit Margin is the number that shows what's left after every expense is paid. You're already thinking like a CFO!"
+      : "The answer is Net Profit Margin — what's left after ALL the bills are paid. That's exactly what today's webinar is about!";
     document.getElementById("result-time").textContent = correct
       ? `⏱ Your time: ${formatTime(elapsed)}`
       : `You answered: ${OPTIONS[selected]}`;
@@ -220,18 +299,41 @@
     show("screen-result");
   };
 
-  window.showLeaderboard = () => {
+  window.showLeaderboard = (host) => {
     show("screen-leaderboard");
+    const badge = document.getElementById("host-badge-wrap");
+    const controls = document.getElementById("host-controls");
+    if (host) {
+      badge.innerHTML = `<div class="host-badge">👑 Host View</div>`;
+      controls.classList.remove("hidden");
+    } else {
+      badge.innerHTML = "";
+      controls.classList.add("hidden");
+    }
+    listenLeaderboard();
+  };
+
+  window.resetLeaderboard = () => {
+    if (confirm("Are you sure you want to reset the leaderboard? This cannot be undone.")) {
+      leaderboardRef.remove();
+    }
+  };
+
+  function listenLeaderboard() {
     leaderboardRef.on("value", snapshot => {
       const data = snapshot.val();
       const entries = data ? Object.values(data) : [];
       const correct = entries.filter(e => e.correct).sort((a,b) => a.time - b.time);
       const incorrect = entries.filter(e => !e.correct);
+
+      document.getElementById("stat-total").textContent = entries.length;
+      document.getElementById("stat-correct").textContent = correct.length;
+
       const list = document.getElementById("leaderboard-list");
       list.innerHTML = "";
 
       if (correct.length === 0) {
-        list.innerHTML = `<p style="color:#999;text-align:center">No correct answers yet...</p>`;
+        list.innerHTML = `<p style="color:#999;text-align:center;margin-bottom:8px">No correct answers yet...</p>`;
       }
 
       correct.forEach((entry, i) => {
@@ -254,10 +356,13 @@
         });
       }
     });
-  };
+  }
 
   document.getElementById("name-input").addEventListener("keydown", e => {
     if (e.key === "Enter") window.startQuiz();
+  });
+  document.getElementById("host-password").addEventListener("keydown", e => {
+    if (e.key === "Enter") window.verifyHost();
   });
 </script>
 </body>
